@@ -9,6 +9,12 @@ function l_play_dir {
 	elif ls "$@" | grep .mp4
 	then
 		$player "$@"/*.mp4
+	elif ls "$@" | grep .m4a
+	then
+		$player "$@"/*.m4a
+	elif ls "$@" | grep .avi
+	then
+		$player "$@"/*.avi
 	fi
 }
 
@@ -32,6 +38,12 @@ function l_file {
 	then
 		$player "$@"
 	elif ls "$@" | grep .mp4
+	then
+		$player "$@"
+	elif ls "$@" | grep .m4a
+	then
+		$player "$@"
+	elif ls "$@" | grep .avi
 	then
 		$player "$@"
 	fi

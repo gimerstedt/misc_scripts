@@ -1,21 +1,18 @@
 #!/bin/bash
 rarfs=/tmp/rarfs
 player=mplayer
+formats=(mkv mp4 m4a avi)
 
 function l_play_dir {
-	if ls "$@" | grep .mkv
-	then
-		$player "$@"/*.mkv
-	elif ls "$@" | grep .mp4
-	then
-		$player "$@"/*.mp4
-	elif ls "$@" | grep .m4a
-	then
-		$player "$@"/*.m4a
-	elif ls "$@" | grep .avi
-	then
-		$player "$@"/*.avi
-	fi
+	for ix in ${!formats[*]}
+	do
+		format=${formats[$ix]}
+		if ls "$@" | grep .$format
+		then
+			$player "$@"/*.$format
+			break
+		fi
+	done
 }
 
 function l_mount {
@@ -34,18 +31,16 @@ function l_file {
 		l_mount "$@"
 		l_play_dir $rarfs
 		l_umount "$@"
-	elif ls "$@" | grep .mkv
-	then
-		$player "$@"
-	elif ls "$@" | grep .mp4
-	then
-		$player "$@"
-	elif ls "$@" | grep .m4a
-	then
-		$player "$@"
-	elif ls "$@" | grep .avi
-	then
-		$player "$@"
+	else
+		for ix in ${!formats[*]}
+		do
+			format=${formats[$ix]}
+			if ls "$@" | grep .$format
+			then
+				$player "$@"
+				break
+			fi
+		done
 	fi
 }
 

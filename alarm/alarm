@@ -1,0 +1,10 @@
+#!/bin/bash
+alarm_file="/home/ake1/misc/alarm.m4a"
+alarm_player="/usr/bin/mplayer" # make sure it's on the path if it's not absolute
+alarm_time=0700 && [ -z $1 ] || alarm_time=$1
+
+if [ ! -f "$alarm_file" ];then echo "cannot find alarm_file." && exit 1;fi
+if [ ! `which at` ];then echo "at not installed." && exit 1;fi
+if [ ! `which $alarm_player` ];then echo "$alarm_player not installed." && exit 1;fi
+
+echo "mplayer $alarm_file" | at $alarm_time

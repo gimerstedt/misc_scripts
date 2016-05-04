@@ -1,0 +1,73 @@
+#!/bin/bash
+rarfs=/tmp/rarfs
+player=mplayer
+formats=(mkv mp4 m4a avi)
+
+function l_play_dir {
+	for ix in ${!formats[*]}
+	do
+		format=${formats[$ix]}
+		if ls "$@" | grep .$format
+		then
+			$player "$@"/*.$format
+			break
+		fi
+	done
+}
+
+function l_mount {
+	mkdir -p $rarfs
+	rar2fs "$@" $rarfs
+}
+
+function l_umount {
+	fusermount -u $rarfs
+	rm -rf $rarfs
+}
+
+function l_file {
+	if ls "$@" | grep .rar
+	then
+		l_mount "$@"
+		l_play_dir $rarfs
+		l_umount "$@"
+	else
+		for ix in ${!formats[*]}
+		do
+			format=${formats[$ix]}
+			if ls "$@" | grep .$format
+			then
+				$player "$@"
+				break
+			fi
+		done
+	fi
+}
+
+function l_dir {
+	if ls "$@" | grep .rar
+	then
+		# more than one rar file
+		if [ $(ls "$@" | grep .rar | wc -l) -gt 1 ]
+		then
+			if ls "$@" | grep part01.rar
+			then
+				file_to_play="*part01.rar"
+			fi
+		else
+			file_to_play="*.rar"
+		fi
+		l_mount "$@"/$file_to_play
+		l_play_dir $rarfs
+		l_umount "$@"
+	else
+		l_play_dir "$@"
+	fi
+}
+
+if [ -f "$@" ] # file
+then
+	l_file "$@"
+else # directory
+	l_dir "$@"
+fi

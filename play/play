@@ -1,73 +1,101 @@
 #!/bin/bash
-rarfs=/tmp/rarfs
 player=mplayer
-formats=(mkv mp4 m4a avi)
+formats=(mkv mp4 m4a avi ts)
+arg=$*
 
-function l_play_dir {
+function fork() {
+	(setsid "$@" > /dev/null 2>&1 &);
+}
+
+function format_in_dir() {
 	for ix in ${!formats[*]}
 	do
 		format=${formats[$ix]}
-		if ls "$@" | grep .$format
+		if [ "$(find "$arg" -iname "*.$format" | wc -l)" -gt 0 ]
 		then
-			$player "$@"/*.$format
+			echo "$format"
 			break
 		fi
 	done
 }
 
-function l_mount {
-	mkdir -p $rarfs
-	rar2fs "$@" $rarfs
+function play_media_dir() {
+	dir_to_play=$*
+	format=$(format_in_dir)
+
+	fork $player "$dir_to_play"/*."$format"
 }
 
-function l_umount {
-	fusermount -u $rarfs
-	rm -rf $rarfs
+function play_rar_file() {
+	file_to_play=$*
+	(setsid unrar p -inul "$file_to_play" | mplayer -idx -cache 25000 - > /dev/null 2>&1 &);
 }
 
-function l_file {
-	if ls "$@" | grep .rar
+function play_media_file() {
+	file_to_play=$*
+
+	(setsid $player "$file_to_play" > /dev/null 2>&1 &);
+}
+
+function get_extension() {
+	file=$*
+	ext="${file##*.}"
+
+	echo "$ext"
+}
+
+function play_file() {
+	file_to_play=$*
+	ext=$(get_extension "$file_to_play")
+
+	if [ "$ext" == "rar" ]
 	then
-		l_mount "$@"
-		l_play_dir $rarfs
-		l_umount "$@"
+		play_rar_file "$file_to_play"
 	else
-		for ix in ${!formats[*]}
-		do
-			format=${formats[$ix]}
-			if ls "$@" | grep .$format
-			then
-				$player "$@"
-				break
-			fi
-		done
+		play_media_file "$file_to_play"
 	fi
 }
 
-function l_dir {
-	if ls "$@" | grep .rar
+function contains_rar_file() {
+	path_to_search=$*
+
+	if [ "$(find "$path_to_search" -iname "*.rar" | wc -l)" -gt 0 ]
 	then
-		# more than one rar file
-		if [ $(ls "$@" | grep .rar | wc -l) -gt 1 ]
+		echo yes
+	fi
+}
+
+function contains_part_named_rar_files() {
+	path_to_search=$*
+
+	if [ "$(find "$path_to_search" -iname "*part01.rar" | wc -l)" -gt 0 ]
+	then
+		echo yes
+	fi
+}
+
+function play_dir() {
+	dir_to_play=$*
+	dir_contains_rar_file=$(contains_rar_file "$dir_to_play")
+	dir_contains_part_named_rar_files=$(contains_part_named_rar_files "$dir_to_play")
+
+	if [ "$dir_contains_rar_file" ]
+	then
+		file_to_play="*.rar"
+		if [ "$dir_contains_part_named_rar_files" ]
 		then
-			if ls "$@" | grep part01.rar
-			then
-				file_to_play="*part01.rar"
-			fi
-		else
-			file_to_play="*.rar"
+			file_to_play="*part01.rar"
 		fi
-		l_mount "$@"/$file_to_play
-		l_play_dir $rarfs
-		l_umount "$@"
+		full_file_to_play="$dir_to_play/$file_to_play"
+		play_rar_file "$full_file_to_play"
 	else
-		l_play_dir "$@"
+		play_media_dir "$dir_to_play"
 	fi
 }
 
-if [ -f "$@" ] # file
+if [ -f "$arg" ] # file
 then
-	l_file "$@"
+	play_file "$arg"
 else # directory
-	l_dir "$@"
+	play_dir "$arg"
 fi

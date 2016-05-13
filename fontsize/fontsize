@@ -1,0 +1,23 @@
+#!/bin/bash
+arg=$*
+
+function set_font_size(){
+	fontsize=$*
+	
+	font=$(cat ~/.Xresources | grep "^urxvt.font" | cut -d ':' -f 3)
+	tempfile=$(tempfile XXXX)
+	
+	cp ~/.Xresources $tempfile && \
+	echo "urxvt.font: xft:${font}:size=${fontsize}" >> $tempfile && \
+	xrdb $tempfile && \
+	rm $tempfile
+}
+
+case $arg in
+	''|*[!0-9]*)
+		echo "That's not a fontsize..."
+		;;
+	*)
+		set_font_size $arg
+		;;
+esac

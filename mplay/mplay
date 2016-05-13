@@ -1,0 +1,3 @@
+#!/bin/bash
+toplay=$*
+mplayer -novideo -loop 0 $toplay

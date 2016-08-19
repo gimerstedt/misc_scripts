@@ -1,0 +1,158 @@
+#!/bin/bash
+###################################
+# for use with docker registry v2 #
+###################################
+
+# CONFIG
+endpoint="http://dockerregistry:5000/v2"
+v2header="Accept: application/vnd.docker.distribution.manifest.v2+json"
+# /CONFIG
+
+# DEPENDENCIES
+if [ ! `which curl` ]; then
+	echo "curl is not installed"
+	exit 1
+fi
+if [ ! `which jq` ]; then
+	echo "jq is not installed"
+	exit 1
+fi
+# /DEPENDENCIES
+
+# ARGS
+command=$1
+image=$2
+# /ARGS
+
+function install_script(){
+	mkdir -p ~/bin
+	ln -fs `pwd`/registry ~/bin/registry
+	echo 'export PATH=$PATH:~/bin' >> ~/.bashrc
+}
+
+function ping_registry(){
+	curl -v $endpoint/ 2>&1 | grep "HTTP/1.1"
+}
+
+function list_repositories(){
+	curl -s $endpoint/_catalog
+}
+
+function list_tags(){
+	repository=$1
+	curl -s $endpoint/$repository/tags/list
+}
+
+function get_manifest(){
+	image=$1
+	repository=`echo $image | cut -d ':' -f 1`
+	tag=`echo $image | cut -d ':' -f 2`
+	curl -v -H "$v2header" $endpoint/$repository/manifests/$tag | jq '.'
+}
+
+function get_digest(){
+	image=$1
+	repository=`echo $image | cut -d ':' -f 1`
+	tag=`echo $image | cut -d ':' -f 2`
+	digest=`curl -v -H "$v2header" $endpoint/$repository/manifests/$tag 2>&1 | grep Docker-Content-Digest | cut -d ' ' -f 3 | tr -d '\r'`
+	echo $digest
+}
+
+function rm_tag(){
+	image=$1
+	repository=`echo $image | cut -d ':' -f 1`
+	digest=`get_digest $image`
+	url="${endpoint}/${repository}/manifests/${digest}"
+	curl -s -X DELETE $url
+}
+
+function rm_all_tags(){
+	image=$1
+	repository=`echo $image | cut -d ':' -f 1`
+	tags=`list_tags $repository | jq '.tags' | tr -d '[]" '`
+	tag_array=(${tags//,/ })
+	for tag in "${!tag_array[@]}"; do
+		tag_to_delete="$repository:${tag_array[tag]}"
+		echo "Deleting $tag_to_delete"
+		rm_tag $tag_to_delete
+	done
+}
+
+function sjb_rm_commitnr_lt(){
+	image=$1
+	repository=`echo $image | cut -d ':' -f 1`
+	tag=`echo $image | cut -d ':' -f 2`
+	commitnr=`echo $tag | cut -d '-' -f 2 | cut -d '.' -f 1`
+	case $commitnr in
+		''|*[!0-9]*) echo "Commit number in tag is NAN" && exit 1 ;;
+	esac
+	tags=`list_tags $repository | jq '.tags' | tr -d '[]" '`
+	tag_array=(${tags//,/ })
+	for tag in "${!tag_array[@]}"; do
+		tag_commitnr=`echo ${tag_array[tag]} | cut -d '-' -f 2 | cut -d '.' -f 1`
+		if [ "$tag_commitnr" -lt "$commitnr" ]; then
+			tag_to_delete="$repository:${tag_array[tag]}"
+			echo "Deleting $tag_to_delete"
+			rm_tag $tag_to_delete
+		else
+			tag_to_delete="$repository:${tag_array[tag]}"
+			echo "Skipping $tag_to_delete"
+		fi
+	done
+}
+
+case "$command" in
+	install)
+		install_script
+		;;
+	ping)
+		ping_registry
+		;;
+	ls)
+		if [ -z $image ]; then
+			list_repositories | jq '.'
+		else
+			if [[ $image != *":"* ]]; then
+				list_tags $image | jq '.'
+			else
+				get_manifest $image
+			fi
+		fi
+		;;
+	rm)
+		rm_tag $image && \
+		echo "Tag removed, blobs remain in registry, run gc to remove."
+		;;
+	rmrepo)
+		rm_all_tags $image
+		;;
+	sjb-rm-commitnr-lt)
+		sjb_rm_commitnr_lt $image
+		;;
+	*)
+	echo "ping"
+	echo "	ping registry."
+	echo ""
+	echo "ls"
+	echo "	list repositories."
+	echo ""
+	echo "ls <repository>"
+	echo "	list tags on repository."
+	echo ""
+	echo "ls <repository:tag>"
+	echo "	get manifest for tag in repository."
+	echo ""
+	echo "rm <repository:tag>"
+	echo "	remove tag from repository."
+	echo ""
+	echo "rmrepo <repository>"
+	echo "	remove all tags from repository."
+	echo ""
+	echo "sjb-rm-commitnr-lt <repository:tag>"
+	echo "	remove all tags where commitnr is less than the one provided from repository."
+	echo "	OBS! only use for repositories with tags in the format of \"44.19d875e\" or \"0.0.1-53.65d487\"."
+	echo ""
+	echo "install"
+	echo "	install script to ~/bin and add to PATH."
+	exit 1
+esac

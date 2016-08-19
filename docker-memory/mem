@@ -1,0 +1,53 @@
+#!/bin/bash
+# CONFIG
+memdir="/sys/fs/cgroup/memory/docker"
+#/CONFIG
+
+# DEPENDENCIES
+if [ ! `which docker` ];then echo "install docker" && exit 1;fi
+if [ ! `which bc` ];then echo "install bc" && exit 1;fi
+# /DEPENDENCIES
+
+# ARGS
+command=$1
+# /ARGS
+
+function get_mem_use_mb_cgroups(){
+	container=`docker ps --no-trunc --format "{{.ID}} {{.Names}}"`
+	readarray container_arr <<<"$container"
+	for c in "${!container_arr[@]}"; do
+		name=`echo ${container_arr[c]} | cut -d ' ' -f 2`
+		id=`echo ${container_arr[c]} | cut -d ' ' -f 1`
+		res_mem_bytes=`cat "$memdir/$id/memory.stat" | grep total_rss | grep -v huge | cut -d ' ' -f 2`
+		res_mem_mb=`echo "$res_mem_bytes /1000/1000"|bc`
+		echo "${res_mem_mb}M in use by $name"
+		echo "${res_mem_mb}"
+	done
+}
+
+function cg(){
+	get_mem_use_mb_cgroups | grep M | sort -n -r
+	tot=`get_mem_use_mb_cgroups | grep -v M | tr '\n' '+'`
+	tot_sum=`echo "${tot}0"|bc`
+	tot_sum_gb=`echo "$tot_sum / 1000" | bc`
+	echo "total: ${tot_sum}M (${tot_sum_gb}G)"
+}
+
+function get_mem_use_mb_ps(){
+	ps -eo size,pid,user,command --sort -size | awk '{ hr=$1/1024 ; printf("%13.2f Mb ",hr) } { for ( x=4 ; x<=NF ; x++ ) { printf("%s ",$x) } print "" }' | grep -v "0\."
+}
+
+case "$command" in
+	cg)
+		cg
+		;;
+	ps)
+		get_mem_use_mb_ps
+		;;
+	*)
+		echo "cg"
+		echo "  show memory usage of containers according to cgroups"
+		echo "ps"
+		echo "  show memory usage of processes above 0.xM according to ps"
+		exit 1
+esac

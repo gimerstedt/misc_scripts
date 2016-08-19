@@ -1,0 +1,32 @@
+#!/bin/bash
+#which environment to check version of
+miljo=$1
+
+function get_versions(){
+	version_url="http://sjobasis-gitlab.kbv.se/sjobasis/sjobasis-deploy-$miljo/raw/master/Version"
+	tar_version=`curl -s $version_url`
+	maven_url="http://sjobasis-buildtools.kbv.se:8081/content/repositories/kbv/se/kbv/sjobasis/sjobasis/$tar_version/sjobasis-$tar_version.tar"
+	work_dir=`mktemp -d XXXXXXX`
+	
+	cd $work_dir
+	curl -s -O $maven_url
+	tar xf sjobasis-${tar_version}.tar
+	cd sjobasis-$tar_version
+	
+	projects=`find . -maxdepth 1 -type d | grep -v scripts | tr -d './'`
+	project_array=(${projects// / })
+	for project in "${!project_array[@]}"; do
+		proj=${project_array[project]}
+		echo "${proj}:$(cat ${proj}/Version)"
+	done
+	
+	cd ../.. && rm -rf $work_dir
+}
+
+case "$miljo" in
+	verif|prod|test)
+		get_versions
+		;;
+	*)
+	echo "Specify which environment you want to check version of: test, verif or prod."
+esac

@@ -23,7 +23,7 @@ function play_media_dir() {
 	dir_to_play=$*
 	format=$(format_in_dir)
 
-	fork $player "$dir_to_play"/*."$format"
+	fork $player "${dir_to_play}/$(ls "$dir_to_play" | grep $format | grep -v sample)"
 }
 
 function play_rar_file() {
